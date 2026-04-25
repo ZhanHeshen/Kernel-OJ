@@ -1,0 +1,77 @@
+#include "kernel_operator.h"
+
+using namespace AscendC;
+
+constexpr int32_t BUFFER_NUM = 2;
+
+class KernelAdd {
+public:
+    __aicore__ inline KernelAdd() {}
+    __aicore__ inline void Init(__gm__ uint8_t* srcA, __gm__ uint8_t* srcB, __gm__ uint8_t* dst, uint32_t totalLength)
+    {
+        this->totalLength = totalLength;
+        this->tileNum = totalLength / TILE_LENGTH;
+
+        srcAGm.SetGlobalBuffer((__gm__ half*)srcA);
+        srcBGm.SetGlobalBuffer((__gm__ half*)srcB);
+        dstGm.SetGlobalBuffer((__gm__ half*)dst);
+
+        pipe.InitBuffer(inQueueA, BUFFER_NUM, TILE_LENGTH * sizeof(half));
+        pipe.InitBuffer(inQueueB, BUFFER_NUM, TILE_LENGTH * sizeof(half));
+        pipe.InitBuffer(outQueue, BUFFER_NUM, TILE_LENGTH * sizeof(half));
+    }
+
+    __aicore__ inline void Process()
+    {
+        for (int32_t i = 0; i < tileNum; i++) {
+            CopyIn(i);
+            Compute(i);
+            CopyOut(i);
+        }
+    }
+
+private:
+    __aicore__ inline void CopyIn(int32_t idx)
+    {
+        // LocalTensor<half> srcALocal = inQueueA.AllocTensor<half>();
+        // LocalTensor<half> srcBLocal = inQueueB.AllocTensor<half>();
+        // DataCopy(srcALocal, srcAGm[idx * TILE_LENGTH], TILE_LENGTH);
+        // DataCopy(srcBLocal, srcBGm[idx * TILE_LENGTH], TILE_LENGTH);
+        // inQueueA.EnQue(srcALocal);
+        // inQueueB.EnQue(srcBLocal);
+    }
+
+    __aicore__ inline void Compute(int32_t idx)
+    {
+        // LocalTensor<half> srcALocal = inQueueA.DeQue<half>();
+        // LocalTensor<half> srcBLocal = inQueueB.DeQue<half>();
+        // LocalTensor<half> dstLocal = outQueue.AllocTensor<half>();
+        // Add(dstLocal, srcALocal, srcBLocal, TILE_LENGTH);
+
+        // outQueue.EnQue(dstLocal);
+        // inQueueA.FreeTensor(srcALocal);
+        // inQueueB.FreeTensor(srcBLocal);
+    }
+
+    __aicore__ inline void CopyOut(int32_t idx)
+    {
+        // LocalTensor<half> dstLocal = outQueue.DeQue<half>();
+        // DataCopy(dstGm[idx * TILE_LENGTH], dstLocal, TILE_LENGTH);
+        // outQueue.FreeTensor(dstLocal);
+    }
+
+    static constexpr int32_t TILE_LENGTH = 256;
+    TPipe pipe;
+    TQue<QuePosition::VECIN, BUFFER_NUM> inQueueA, inQueueB;
+    TQue<QuePosition::VECOUT, BUFFER_NUM> outQueue;
+    GlobalTensor<half> srcAGm, srcBGm, dstGm;
+    uint32_t totalLength;
+    uint32_t tileNum;
+};
+
+extern "C" __global__ __aicore__ void add_kernel(__gm__ uint8_t* srcA, __gm__ uint8_t* srcB, __gm__ uint8_t* dst, uint32_t totalLength)
+{
+    KernelAdd op;
+    op.Init(srcA, srcB, dst, totalLength);
+    op.Process();
+}
